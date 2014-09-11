@@ -1,0 +1,18 @@
+<?php
+/**
+ * @file
+ * Additional functions to support the use of the Taxonomy module.
+ */
+
+/**
+ * Helper function to build a vocabulary from an array.
+ *
+ * @param $vocab array
+ *   A nested array where the top level items are Vocabularies and
+ *   everything below are the terms.
+ *
+ * @return Boolean
+ *   TRUE if successful, FALSE if any issues were found.
+ */
+function tde_build_vocabs($vocab) {
+}
