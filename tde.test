@@ -1,0 +1,112 @@
+<?php
+
+/**
+ * @file
+ * Tests for tde.module.
+ */
+
+/**
+ * Provides automated tests for the TDE module.
+ */
+class TdeTestCase extends DrupalWebTestCase {
+
+  /**
+   * A user with various administrative privileges.
+   */
+  protected $admin_user;
+  
+  /**
+   * A sample array to create a vocabulary from.
+   */
+  protected $base_vocab;
+  
+  /**
+   * The base vocab with extra items added
+   */
+  protected $extended_vocab;
+  
+  public static function getInfo() {
+    return array(
+      'name' => 'Taxonomy Developer Extras functionality',
+      'description' => 'Create, and update Vocabularies from a simple array.',
+      'group' => 'Taxonomy',
+    );
+  }
+
+  function setUp() {
+    parent::setUp('taxonomy', 'tde');
+
+    // Create users.
+    $this->admin_user = $this->drupalCreateUser(array(
+      'access administration pages',
+      'administer taxonomy',
+    ));
+    
+    $key1 = $this->randomName();
+    $key2 = $this->randomName();
+    
+    $this->base_vocab = array(
+      $key1 => array(
+        'red', 'green', 'blue',
+      ),
+    );
+
+    $this->extended_vocab = $this->base_vocab;
+    $this->extended_vocab[$key1]['orange'] = array(
+      'high', 'middle', 'low'
+    );
+    $this->extended_vocab[$key2] = array(
+      'sphere' => array(
+        'round', 'circular'
+      ),
+      'box',
+      'isododecahedron'
+    );
+    
+    variable_set('clean_url', 1);
+  }
+  
+  /**
+   * Test creating a new vocabulary.
+   */
+  function testCreateVocabulary() {
+    $this->drupalLogin($this->admin_user);
+    
+    // Visit the main taxonomy administration page.
+    $this->drupalGet('admin/structure/taxonomy');
+    
+    // Assert our Vocab does not exist.
+    $keys = array_keys($this->extended_vocab);
+    $this->assertNoText(t($keys[0]));
+    $this->assertNoText(t($keys[1]));
+    
+    // Create our test taxonomy from the base vocab
+    tde_build_vocabs($this->base_vocab);
+    
+    // Reload the main taxonomy administration page.
+    $this->drupalGet('admin/structure/taxonomy');
+    $this->assertText(t($keys[0]));
+    $this->assertNoText(t($keys[1]));
+    
+    // Check our base vocabs terms
+    $this->drupalGet('admin/structure/taxonomy/' . $keys[0]);
+    $terms = $this->base_vocab[$keys[0]];
+    for ($i = 0; $i < count($terms); $i++) {
+      $this->assertText(t($terms[$i]));
+    }
+    
+    // Extend Taxonomy with extra in the existing vocab and
+    // a new one
+    tde_build_vocabs($this->extended_vocab);
+    
+    // Check we now have both.
+    $this->drupalGet('admin/structure/taxonomy');
+    $this->assertText(t($keys[0]));
+    $this->assertText(t($keys[1]));
+    
+    // Check all the terms are in each.
+    
+    // Check the terms are nested correctly.
+    
+  }
+}
