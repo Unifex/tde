@@ -1,0 +1,7 @@
+name = Taxonomy Developer Extras
+description = Support functions to make Taxonomy a little simplier for developers.
+package = Core
+version = VERSION
+core = 7.x
+
+dependencies[] = taxonomy
