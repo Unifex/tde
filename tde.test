@@ -1,5 +1,4 @@
 <?php
-
 /**
  * @file
  * Tests for tde.module.
@@ -11,20 +10,20 @@
 class TdeTestCase extends DrupalWebTestCase {
 
   /**
-   * A user with various administrative privileges.
+   * A user with taxonomy privileges.
    */
-  protected $admin_user;
-  
+  protected $taxonomy_user;
+
   /**
    * A sample array to create a vocabulary from.
    */
   protected $base_vocab;
-  
+
   /**
    * The base vocab with extra items added
    */
   protected $extended_vocab;
-  
+
   public static function getInfo() {
     return array(
       'name' => 'Taxonomy Developer Extras functionality',
@@ -37,76 +36,126 @@ class TdeTestCase extends DrupalWebTestCase {
     parent::setUp('taxonomy', 'tde');
 
     // Create users.
-    $this->admin_user = $this->drupalCreateUser(array(
+    $this->taxonomy_user = $this->drupalCreateUser(array(
       'access administration pages',
       'administer taxonomy',
     ));
-    
-    $key1 = $this->randomName();
-    $key2 = $this->randomName();
-    
+
+    // Build 2 vocabulary arrays
+    $key1 = 'v1 ' . $this->randomName(16);
+    $key2 = 'v2 ' . $this->randomName(16);
+
+    // Our first one is a simple flat vocab
     $this->base_vocab = array(
       $key1 => array(
-        'red', 'green', 'blue',
+        'level 1 ' . $this->randomName(8),
+        'level 1 ' . $this->randomName(8),
+        'level 1 ' . $this->randomName(8),
       ),
     );
 
+    // The second builds on the first to create a more involved structure.
     $this->extended_vocab = $this->base_vocab;
-    $this->extended_vocab[$key1]['orange'] = array(
-      'high', 'middle', 'low'
+    $this->extended_vocab[$key1]['level 1 ' . $this->randomName(8)] = array(
+      'level 2 ' . $this->randomName(4),
+      'level 2 ' . $this->randomName(4),
+      'level 2 ' . $this->randomName(4),
     );
     $this->extended_vocab[$key2] = array(
-      'sphere' => array(
-        'round', 'circular'
+      'level 1 ' . $this->randomName(8) => array(
+        'level 2 ' . $this->randomName(4),
+        'level 2 ' . $this->randomName(4),
       ),
-      'box',
-      'isododecahedron'
+      'level 1 ' . $this->randomName(8),
+      'level 1 ' . $this->randomName(8),
     );
-    
+
     variable_set('clean_url', 1);
+
+    $this->drupalLogin($this->taxonomy_user);
   }
-  
+
+  /**
+   * Test basic User access
+   */
+  function testUserAccess() {
+    $this->drupalGet("admin/structure/taxonomy");
+    $this->assertResponse(200, 'User is allowed to view the Taxonomy admin page.');
+    $this->assertText('Add vocabulary', "Found the Add vocabulary link.");
+    // Can we add a taxonomy manually?
+    $this->drupalGet("admin/structure/taxonomy/add");
+    $edit = array();
+    $edit['name'] = $this->randomName(8);
+    $edit['machine_name'] = strtolower($edit['name']);
+    $this->drupalPost('admin/structure/taxonomy/add', $edit, t('Save'));
+    $this->assertText(t('Created new vocabulary @name.', array('@name' => $edit['name'])));
+  }
+
   /**
    * Test creating a new vocabulary.
    */
   function testCreateVocabulary() {
-    $this->drupalLogin($this->admin_user);
-    
     // Visit the main taxonomy administration page.
     $this->drupalGet('admin/structure/taxonomy');
-    
+
     // Assert our Vocab does not exist.
     $keys = array_keys($this->extended_vocab);
-    $this->assertNoText(t($keys[0]));
-    $this->assertNoText(t($keys[1]));
-    
+    $this->assertNoText($keys[0]);
+    $this->assertNoText($keys[1]);
+
     // Create our test taxonomy from the base vocab
     tde_build_vocabs($this->base_vocab);
-    
+    $this->drupalGet('admin/structure/taxonomy/' . _tde_machine_name($keys[0]));
+
     // Reload the main taxonomy administration page.
     $this->drupalGet('admin/structure/taxonomy');
-    $this->assertText(t($keys[0]));
-    $this->assertNoText(t($keys[1]));
-    
+    $this->assertText($keys[0]);
+    $this->assertNoText($keys[1]);
+
     // Check our base vocabs terms
-    $this->drupalGet('admin/structure/taxonomy/' . $keys[0]);
+    $this->drupalGet('admin/structure/taxonomy/' . _tde_machine_name($keys[0]));
     $terms = $this->base_vocab[$keys[0]];
     for ($i = 0; $i < count($terms); $i++) {
-      $this->assertText(t($terms[$i]));
+      $this->assertText(
+        $terms[$i],
+        t('Term !name in !vocab was found.', array(
+          '!name' => $terms[$i],
+          '!vocab' => $keys[0],
+        ))
+      );
     }
-    
+
     // Extend Taxonomy with extra in the existing vocab and
     // a new one
+
     tde_build_vocabs($this->extended_vocab);
-    
+
     // Check we now have both.
     $this->drupalGet('admin/structure/taxonomy');
-    $this->assertText(t($keys[0]));
-    $this->assertText(t($keys[1]));
-    
+    $this->assertText($keys[0]);
+    $this->assertText($keys[1]);
+
     // Check all the terms are in each.
-    
-    // Check the terms are nested correctly.
-    
+    for ($k = 0; $k < count($keys); $k++) {
+      $this->drupalGet('admin/structure/taxonomy/' . _tde_machine_name($keys[$k]));
+      $terms = $this->extended_vocab[$keys[$k]];
+      $flat_terms = array_walk_recursive(
+        $terms,
+        function($a) use (&$return) {
+          $return[] = $a;
+        }
+      );
+      for ($i = 0; $i < count($flat_terms); $i++) {
+        if (!empty($flat_terms[$i])) {
+          $this->assertText(
+            $flat_terms[$i],
+            t('Term !name in !vocab was found.', array(
+              '!name' => $flat_terms[$i],
+              '!vocab' => $keys[$k],
+            ))
+          );
+        }
+      }
+    }
   }
 }

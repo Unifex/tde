@@ -7,12 +7,149 @@
 /**
  * Helper function to build a vocabulary from an array.
  *
- * @param $vocab array
+ * The structure of the $vocab_array is;
+ * $vocab_array = array(
+ *   'vocab_name' => array(
+ *     'term',
+ *     'term',
+ *     'term',
+ *   ),
+ *   'vocab_name' => array(
+ *     'term',
+ *     'term' => array(
+ *       'nested term',
+ *       'nested term',
+ *     ),
+ *     'term',
+ *   ),
+ * );
+ *
+ * @param $vocab_array array
  *   A nested array where the top level items are Vocabularies and
  *   everything below are the terms.
  *
  * @return Boolean
  *   TRUE if successful, FALSE if any issues were found.
  */
-function tde_build_vocabs($vocab) {
+function tde_build_vocabs($vocab_array) {
+  // Start with the vocabularies
+  $vocabs = array_keys($vocab_array);
+  for ($i = 0; $i < count($vocabs); $i++) {
+    // Do we already have this vocabulary?
+    $vocab = taxonomy_vocabulary_machine_name_load(_tde_machine_name($vocabs[$i]));
+    if (empty($vocab)) {
+      // We do not have this vocab. Build it.
+      $vocab = new stdClass;
+      $vocab->name = $vocabs[$i];
+      $vocab->machine_name = _tde_machine_name($vocabs[$i]);
+      $vocab->description = '';
+      taxonomy_vocabulary_save($vocab);
+    }
+    // We have a vocab.  Add terms to it.
+    $terms = $vocab_array[$vocabs[$i]];
+    tde_add_terms_to_vocab($terms, $vocab);
+  }
+}
+
+/**
+ * Add the array of items to the vocabulary taking into account term parants
+ * if provided.
+ *
+ * @param $terms array
+ *   An array of term names as strings or keys to a nested array.
+ *
+ * @param $vocab object
+ *   The vocabulary object the terms live on.
+ *
+ * @param $parent mixed
+ *   The term object or FALSE.
+ */
+function tde_add_terms_to_vocab($terms, $vocab, $parent = FALSE) {
+  // Sanity check.
+  if (empty($terms)) {
+    // No terms.
+    return;
+  }
+  if (FALSE == $parent) {
+    // As a minimum we want the parent term id set to 0.
+    $parent = new stdClass;
+    $parent->tid = 0;
+  }
+  // Walk over the supplied terms.  We want to examine each and see if they
+  // are a key or a string.
+  $term_keys = array_keys($terms);
+  for ($i = 0; $i < count($term_keys); $i++) {
+    // Examine the value of each key to see if it's an array. The default
+    // assumption is it is a string.
+    $value = $terms[$term_keys[$i]];
+    if (is_array($value)) {
+      // Add the key as a term
+      $new_term = tde_add_term_to_vocab($term_keys[$i], $vocab, $parent->tid);
+      if (FALSE != $new_term) {
+        // Recursively call ourself with this term as the parent and our value
+        // as the new terms array.
+        tde_add_terms_to_vocab($value, $vocab, $new_term);
+      }
+    }
+    else {
+      // The value is the new term.
+      $new_term = tde_add_term_to_vocab($value, $vocab, $parent->tid);
+    }
+  }
+}
+
+/**
+ * Build and save the term to a vocab with a parent.
+ *
+ * @param string $term
+ *   The term we are creating.
+ *
+ * @param object $vocab
+ *   The Vocabulary the term is being added to.
+ *
+ * @param array $parent
+ *   The parent term id for this term.
+ *
+ * @return mixed The term object or FALSE.
+ */
+function tde_add_term_to_vocab($name, $vocab, $parent) {
+  // Do we already have this term in this vocabulary?
+  $terms = taxonomy_get_term_by_name($name, $vocab->machine_name);
+  if (!empty($terms)) {
+    // Should only have one result indexed by its tid.
+    $term_vals = array_values($terms);
+    // We want the object.
+    $term = $term_vals[0];
+  }
+  else {
+    // We do not have this one. Build a stub
+    $term = new stdClass;
+    // Do we want t() here?
+    $term->name = t($name);
+    $term->vid = $vocab->vid;
+  }
+  // Reset the parent
+  $term->parent = $parent;
+  // Save/Update the term
+  $result = taxonomy_term_save($term);
+  // How did that go?
+  if (SAVED_NEW == $result || SAVED_UPDATED == $result) {
+    return $term;
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ * Helper function to generate a machine name.
+ *
+ * @param $human_readable String
+ *   The human readable name.
+ *
+ * @return String
+ *   The machine name generated from the human readable name.
+ */
+function _tde_machine_name($human_readable) {
+  return preg_replace('@[^a-z0-9_]+@', '_', strtolower($human_readable));
 }

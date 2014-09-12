@@ -1,7 +1,9 @@
 name = Taxonomy Developer Extras
 description = Support functions to make Taxonomy a little simplier for developers.
-package = Core
-version = VERSION
+package = Development
+version = 7.x-1.0-dev
 core = 7.x
 
 dependencies[] = taxonomy
+
+files[] = tde.test
